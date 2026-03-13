@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>See's Candies — Checkout Prototype</title>
+  <meta name="description" content="Interactive mobile checkout prototype for See's Candies, featuring multi-recipient shipping, BOPIS pickup, and payment flow.">
+  <meta property="og:title" content="See's Candies — Checkout Prototype">
+  <meta property="og:description" content="Interactive mobile checkout prototype">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script>
+    // Suppress Babel in-browser transformer warning
+    const _cw = console.warn.bind(console);
+    console.warn = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('Babel transformer')) return;
+      _cw(...args);
+    };
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      min-height: 100vh; font-family: 'Roboto', sans-serif;
+      background: #1a1a1a;
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    #proto-body {
+      flex: 1; display: flex; align-items: flex-start; justify-content: center;
+      padding: 56px 24px 80px; width: 100%; gap: 48px;
+    }
+    #proto-sidebar {
+      width: 220px; flex-shrink: 0; padding-top: 8px;
+      display: none;
+    }
+    @media (min-width: 780px) {
+      #proto-sidebar { display: flex; flex-direction: column; gap: 24px; }
+    }
+    .sidebar-card {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px; padding: 16px;
+    }
+    .sidebar-card h3 {
+      font-family: 'Roboto', sans-serif; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: #555; margin-bottom: 12px;
+    }
+    .sidebar-card p, .sidebar-card li {
+      font-family: 'Roboto', sans-serif; font-size: 12px; color: #888;
+      line-height: 1.6;
+    }
+    .sidebar-card ul { padding-left: 14px; display: flex; flex-direction: column; gap: 4px; }
+    .sidebar-card .tag {
+      display: inline-block;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 3px; padding: 2px 7px;
+      font-family: 'Roboto', sans-serif; font-size: 11px; color: #777;
+      margin: 2px 2px 2px 0;
+    }
+    .sidebar-card .flow-step {
+      display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px;
+    }
+    .sidebar-card .flow-num {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: rgba(200,0,0,0.2); border: 1px solid rgba(200,0,0,0.4);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      font-family: 'Roboto', sans-serif; font-size: 10px; font-weight: 700; color: #c66;
+    }
+    .sidebar-card .flow-text {
+      font-family: 'Roboto', sans-serif; font-size: 12px; color: #888; line-height: 1.5;
+    }
+    .sidebar-card .flow-text strong { color: #bbb; font-weight: 700; }
+  </style>
+</head>
+<body>
+
+  <div id="proto-body">
+    <aside id="proto-sidebar">
+      <div class="sidebar-card">
+        <h3>Checkout Flow</h3>
+        <div class="flow-step">
+          <span class="flow-num">1</span>
+          <span class="flow-text"><strong>Delivery</strong> — address, shipping method, gift message, multi-recipient</span>
+        </div>
+        <div class="flow-step">
+          <span class="flow-num">2</span>
+          <span class="flow-text"><strong>Payment</strong> — credit card, PayPal, Klarna, gift card, billing address</span>
+        </div>
+        <div class="flow-step">
+          <span class="flow-num">3</span>
+          <span class="flow-text"><strong>Confirmation</strong> — order summary, reset</span>
+        </div>
+      </div>
+      <div class="sidebar-card">
+        <h3>Features</h3>
+        <ul>
+          <li>Ship to 1–15 recipients</li>
+          <li>BOPIS pickup flow</li>
+          <li>Gift message composer</li>
+          <li>Field-level validation</li>
+          <li>Toast error navigation</li>
+          <li>Billing address toggle</li>
+        </ul>
+      </div>
+      <div class="sidebar-card">
+        <h3>Version</h3>
+        <p style="margin-bottom: 8px; color: #666;">For stakeholder review.<br>Not for development handoff.</p>
+        <span class="tag">v0.4</span>
+        <span class="tag">Mobile</span>
+        <span class="tag">React</span>
+      </div>
+    </aside>
+    <div id="root"></div>
+  </div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+// ─── ASSET URLS ──────────────────────────────────────────────────────────────
+// Chevron SVG as data URI (replaces broken Figma MCP asset)
+const KLARNA_PINK = "#ffb3c7";
+
+// ─── US STATES ────────────────────────────────────────────────────────────────
+const US_STATES = ["Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"];
+
+// ─── STYLE HELPERS ────────────────────────────────────────────────────────────
+const css = {
+  // colors
+  black: "#111",
+  gray300: "#707070",
+  gray100: "#eaeaea",
+  gray50: "#f6f6f6",
+  secondary: "#626264",
+  highlight: "#96701b",
+  sale: "#bf0000",
+  white: "#fff",
+
+  // fonts
+  serif: "'Georgia', 'Times New Roman', serif",
+  sans: "'Roboto', sans-serif",
+};
+
+// ─── ANIMATION STYLES ─────────────────────────────────────────────────────────
+const slideDown = {
+  animation: "slideDown 0.35s cubic-bezier(0.4,0,0.2,1) both",
+};
+const fadeIn = {
+  animation: "fadeIn 0.25s ease both",
+};
+
+// ─── PRIMITIVES ───────────────────────────────────────────────────────────────
+function Input({ label, required, placeholder, type = "text", value, onChange, error }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+      {label && (
+        <label style={{ fontSize: 12, fontFamily: css.sans, color: css.black, lineHeight: "16px" }}>
+          {label}{required && "*"}
+        </label>
+      )}
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange && onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          border: `1px solid ${error ? css.sale : css.gray300}`,
+          background: css.white,
+          height: 40,
+          padding: "8px 16px",
+          fontFamily: css.sans,
+          fontSize: 16,
+          color: css.black,
+          outline: "none",
+          width: "100%",
+          boxSizing: "border-box",
+          transition: "border-color 0.2s",
+        }}
+        onFocus={e => e.target.style.borderColor = css.black}
+        onBlur={e => e.target.style.borderColor = error ? css.sale : css.gray300}
+      />
+      {error && <span style={{ fontSize: 12, color: css.sale, fontFamily: css.sans }}>{error}</span>}
+    </div>
+  );
+}
+
+function Select({ label, required, value, onChange, options, error }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+      {label && (
+        <label style={{ fontSize: 12, fontFamily: css.sans, color: css.black, lineHeight: "16px" }}>
+          {label}{required && "*"}
+        </label>
+      )}
+      <div style={{ position: "relative" }}>
+        <select
+          value={value}
+          onChange={e => onChange && onChange(e.target.value)}
+          style={{
+            border: `1px solid ${error ? css.sale : css.gray300}`,
+            background: css.white,
+            height: 40,
+            padding: "8px 40px 8px 16px",
+            fontFamily: css.sans,
+            fontSize: 16,
+            color: value ? css.black : css.secondary,
+            width: "100%",
+            appearance: "none",
+            outline: "none",
+            cursor: "pointer",
+            boxSizing: "border-box",
+          }}
+        >
+          <option value="">Select...</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <svg aria-hidden="true" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, pointerEvents: "none" }} viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 3l3 4 3-4" stroke="#626264" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </div>
+      {error && <span style={{ fontSize: 12, color: css.sale, fontFamily: css.sans }}>{error}</span>}
+    </div>
+  );
+}
+
+function Checkbox({ checked, onChange, label, children }) {
+  return (
+    <label style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer" }}>
+      <div
+        onClick={() => onChange && onChange(!checked)}
+        style={{
+          width: 24, height: 24, flexShrink: 0,
+          border: `1px solid ${checked ? css.black : css.secondary}`,
+          background: checked ? css.black : css.white,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer", marginTop: 1,
+          transition: "background 0.15s, border-color 0.15s",
+        }}
+      >
+        {checked && (
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 5L5 9L13 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </div>
+      <span style={{ fontFamily: css.sans, fontSize: 16, color: css.secondary, lineHeight: "24px" }}>
+        {label || children}
+      </span>
+    </label>
+  );
+}
+
+function Radio({ checked, onChange, label }) {
+  return (
+    <label style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+      <div
+        onClick={() => onChange && onChange()}
+        style={{
+          width: 24, height: 24, flexShrink: 0,
+          border: checked ? `2px solid ${css.black}` : `1px solid ${css.gray300}`,
+          borderRadius: "50%",
+          background: css.white,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer",
+          transition: "border-color 0.15s",
+        }}
+      >
+        {checked && <div style={{ width: 10, height: 10, background: css.black, borderRadius: "50%" }} />}
+      </div>
+      <span style={{ fontFamily: css.sans, fontSize: 16, color: css.secondary, lineHeight: "24px" }}>{label}</span>
+    </label>
+  );
+}
+
+function Button({ children, variant = "primary", onClick, disabled, style: extraStyle }) {
+  const isPrimary = variant === "primary";
+  const isDisabled = disabled;
+  return (
+    <button
+      onClick={onClick}
+      disabled={isDisabled}
+      style={{
+        width: "100%",
+        minHeight: 50,
+        background: isDisabled ? (isPrimary ? "#ccc" : css.white) : (isPrimary ? css.black : css.white),
+        color: isDisabled ? css.gray300 : (isPrimary ? css.white : css.black),
+        border: isPrimary ? (isDisabled ? "none" : "none") : `1px solid ${isDisabled ? css.gray300 : css.secondary}`,
+        fontFamily: css.sans,
+        fontSize: 16,
+        fontWeight: 700,
+        letterSpacing: "0.05em",
+        textTransform: "uppercase",
+        cursor: isDisabled ? "not-allowed" : "pointer",
+        padding: "0 16px",
+        transition: "opacity 0.2s, transform 0.1s",
+        ...extraStyle,
+      }}
+      onMouseDown={e => !isDisabled && (e.currentTarget.style.transform = "scale(0.99)")}
+      onMouseUp={e => (e.currentTarget.style.transform = "scale(1)")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Divider() {
+  return <div style={{ width: "100%", height: 1, background: css.gray100 }} />;
+}
+
+// ─── STEP INDICATOR ───────────────────────────────────────────────────────────
+function StepBadge({ number, status }) {
+  // status: "active" | "done" | "next"
+  const isDone = status === "done";
+  const isNext = status === "next";
+  return (
+    <div style={{
+      width: 40, height: 40, flexShrink: 0, borderRadius: "50%",
+      background: isNext ? "transparent" : css.black,
+      border: isNext ? `1px solid ${css.gray300}` : (isDone ? `1px solid ${css.black}` : "none"),
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      {isDone
+        ? <svg width="14" height="11" viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 5L5 9L13 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        : <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: isNext ? css.gray300 : css.white, lineHeight: "24px" }}>{number}</span>
+      }
+    </div>
+  );
+}
+
+function StepHeader({ number, title, status, onEdit }) {
+  return (
+    <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+      <StepBadge number={number} status={status} />
+      <span style={{ fontFamily: css.serif, fontSize: 24, letterSpacing: "0.48px", color: status === "next" ? css.gray300 : css.black, lineHeight: "26px" }}>
+        {title}
+      </span>
+      {status === "done" && onEdit && (
+        <button onClick={onEdit} style={{ background: "none", border: "none", fontFamily: css.sans, fontSize: 16, color: css.black, textDecoration: "underline", cursor: "pointer", padding: 0, marginLeft: 4 }}>
+          Edit
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── FULFILLMENT TOGGLE ───────────────────────────────────────────────────────
+function ShipIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 20, height: 20, flexShrink: 0, display: "block" }}>
+      <path d="M19.9393 10.1767L17.2403 5.89043C17.1645 5.75266 17.0129 5.67612 16.8613 5.67612H12.6459V3.79323C12.6459 3.53299 12.4488 3.33398 12.1911 3.33398H0.45489C0.197119 3.33398 0 3.53299 0 3.79323V14.2639C0 14.5242 0.197119 14.7232 0.45489 14.7232H1.60728C1.81956 15.8254 2.78999 16.6673 3.94238 16.6673C5.09477 16.6673 6.0652 15.8254 6.27748 14.7232H13.5254C13.7377 15.8254 14.7081 16.6673 15.8605 16.6673C17.0129 16.6673 17.9833 15.8254 18.1956 14.7232H19.5451C19.8029 14.7232 20 14.5242 20 14.2639V10.4369C20 10.3298 19.9697 10.2532 19.9242 10.1767H19.9393ZM11.7362 6.13536V13.8047H6.29265C6.08036 12.7025 5.10993 11.8606 3.95754 11.8606C2.80516 11.8606 1.83472 12.7025 1.62244 13.8047H0.924943V4.25247H11.7513V6.13536H11.7362ZM16.6035 6.5946L18.5444 9.68683L15.8302 8.96736L15.4208 6.60991H16.6035V6.5946ZM19.1054 13.8047H18.2108C17.9985 12.7025 17.0281 11.8606 15.8757 11.8606C14.7233 11.8606 13.7528 12.7025 13.5406 13.8047H12.6459V6.5946H14.4958L14.981 9.41129C15.0114 9.59499 15.1478 9.73276 15.3146 9.77868L19.1054 10.789V13.82V13.8047Z" fill="#111111"/>
+    </svg>
+  );
+}
+
+function BopisIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 20, height: 20, flexShrink: 0, display: "block" }}>
+      <path d="M10.4649 11.2484H3.42002C3.15209 11.2484 2.9472 11.4532 2.9472 11.7212V16.1499C2.9472 16.4178 3.15209 16.6227 3.42002 16.6227H10.4649C10.7329 16.6227 10.9377 16.4178 10.9377 16.1499V11.7212C10.9377 11.4532 10.7329 11.2484 10.4649 11.2484ZM9.99212 15.677H3.89283V12.194H9.99212V15.677ZM19.9842 6.97728C19.9842 6.89848 19.937 6.83544 19.9054 6.7724L19.8582 6.6936L16.6273 1.8709C16.5327 1.74482 16.3909 1.66602 16.2333 1.66602H3.68794C3.53034 1.66602 3.37273 1.74482 3.29393 1.88666L0.141844 6.72512L0.0788023 6.81968C0.0788023 6.81968 0.0630419 6.88272 0.0472815 6.91424C0.031521 6.96152 0 7.0088 0 7.05609C0 7.07185 0 7.08761 0 7.10337C0.0157604 7.98595 0.441292 8.75821 1.08747 9.27831V18.4982C1.08747 18.7661 1.29236 18.971 1.56028 18.971H18.424C18.6919 18.971 18.8968 18.7661 18.8968 18.4982V9.27831C19.5429 8.75821 19.9685 7.98595 20 7.08761C20 7.08761 20 7.05609 20 7.04033C20 7.02457 20 7.0088 19.9842 6.97728ZM15.9653 2.61164L18.6131 6.56751L18.6446 6.59903H14.9567V6.55175L13.6328 2.61164H15.9653ZM10.3546 6.55175V2.61164H12.6399L13.948 6.55175V6.58327H10.3546V6.53599V6.55175ZM9.40898 2.61164V6.59903H5.8156V6.55175L7.2498 2.61164H9.40898ZM1.3554 6.55175L3.94011 2.61164H6.2569L4.82269 6.55175V6.58327H1.32388L1.3554 6.53599V6.55175ZM16.0914 17.9308H12.7817V12.194H16.0914V17.9308ZM17.9511 18.0254H17.037V11.7369C17.037 11.469 16.8322 11.2641 16.5642 11.2641H12.3089C12.041 11.2641 11.8361 11.469 11.8361 11.7369V18.0254H2.0331V9.76688C2.28526 9.84568 2.55319 9.89297 2.83688 9.89297C3.82979 9.89297 4.71237 9.37287 5.21671 8.60061C5.72104 9.37287 6.60362 9.89297 7.59653 9.89297C8.58944 9.89297 9.47202 9.37287 9.97636 8.60061C10.4807 9.37287 11.3633 9.89297 12.3562 9.89297C13.3491 9.89297 14.2317 9.37287 14.736 8.60061C15.2403 9.37287 16.1229 9.89297 17.1158 9.89297C17.3995 9.89297 17.6675 9.84568 17.9196 9.76688V18.0254H17.9511Z" fill="#111111"/>
+    </svg>
+  );
+}
+
+function FulfillmentToggle({ value, onChange, multipleRecipients }) {
+  const pickupDisabled = multipleRecipients;
+  const opts = [
+    { id: "ship", label: "Shipping", Icon: ShipIcon },
+    { id: "bopis", label: "Pickup", Icon: BopisIcon },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, width: "100%" }}>
+      <div style={{ display: "flex", gap: 8, width: "100%" }}>
+        {opts.map(opt => {
+          const isDisabled = opt.id === "bopis" && pickupDisabled;
+          const isSelected = value === opt.id;
+          return (
+            <div
+              key={opt.id}
+              onClick={() => !isDisabled && onChange(opt.id)}
+              style={{
+                flex: 1, padding: 16,
+                cursor: isDisabled ? "not-allowed" : "pointer",
+                border: `1px solid ${isSelected ? css.black : css.gray100}`,
+                background: isDisabled ? css.gray50 : css.white,
+                display: "flex", flexDirection: "column", gap: 8,
+                transition: "border-color 0.2s",
+                opacity: isDisabled ? 0.5 : 1,
+              }}
+            >
+              <opt.Icon />
+              <span style={{
+                fontFamily: css.sans, fontWeight: 700, fontSize: 12,
+                color: isDisabled ? css.secondary : (isSelected ? css.black : css.secondary),
+                letterSpacing: "-0.24px", lineHeight: "16px",
+              }}>
+                {opt.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {pickupDisabled && (
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: 6,
+          padding: "8px 12px",
+          background: "#fef9ec",
+          border: "1px solid #e8d48b",
+          borderRadius: 2,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+            <circle cx="8" cy="8" r="7.5" stroke="#96701b"/>
+            <path d="M8 4.5V8.5M8 10.5V11" stroke="#96701b" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <span style={{ fontFamily: css.sans, fontSize: 12, color: "#96701b", lineHeight: "18px" }}>
+            Pickup is only available for single-recipient orders. Please remove other recipients first to switch to pickup.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ADDRESS FORM ─────────────────────────────────────────────────────────────
+function AddressForm({ data, onChange, errors = {} }) {
+  const set = (field) => (val) => onChange({ ...data, [field]: val });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", ...slideDown }}>
+      <div>
+        <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 12, color: css.black }}>Shipping to: United States</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <span style={{ fontFamily: css.sans, fontSize: 12, color: css.black }}>Address Type</span>
+        <div style={{ display: "flex", gap: 20 }}>
+          <Radio checked={data.addressType === "home"} onChange={() => set("addressType")("home")} label="Home" />
+          <Radio checked={data.addressType === "business"} onChange={() => set("addressType")("business")} label="Business" />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 12 }}>
+        <Input label="First Name" required value={data.firstName} onChange={set("firstName")} error={errors.firstName} />
+        <Input label="Last Name" required value={data.lastName} onChange={set("lastName")} error={errors.lastName} />
+      </div>
+      <Checkbox checked={data.poBox} onChange={set("poBox")} label="Delivering to a PO Box instead?" />
+      <Input label="Street Address" required value={data.street} onChange={set("street")} error={errors.street} />
+      <Input label="Unit/Suite/Building" value={data.unit} onChange={set("unit")} />
+      <Input label="City" required value={data.city} onChange={set("city")} error={errors.city} />
+      <div style={{ display: "flex", gap: 12 }}>
+        <Select label="State" required value={data.state} onChange={set("state")} options={US_STATES} error={errors.state} />
+        <Input label="Zip/Postal Code" required value={data.zip} onChange={set("zip")} error={errors.zip} />
+      </div>
+      <Input label="Phone" required type="tel" value={data.phone} onChange={set("phone")} error={errors.phone} />
+      <Checkbox checked={data.useBilling} onChange={set("useBilling")} label="Use this address for Billing" />
+    </div>
+  );
+}
+
+// ─── STORE SELECTOR (BOPIS) ───────────────────────────────────────────────────
+// ─── PICKUP FORM (BOPIS) — matches Figma node 78135:100416 ───────────────────
+// Shows pickup location details + "Person Picking Up Order" fields
+function PickupForm({ data, onChange, errors = {} }) {
+  const set = (field) => (val) => onChange({ ...data, [field]: val });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, ...slideDown }}>
+
+      {/* 1. CONTACT — email + opt-in */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px", textTransform: "uppercase" }}>Contact</span>
+          <span style={{ fontFamily: css.sans, fontStyle: "italic", fontSize: 12, color: css.black, whiteSpace: "nowrap", flexShrink: 0, paddingTop: 4 }}>* Required Fields</span>
+        </div>
+        <Input label="Email" required type="email" value={data.pickupEmail || ""} onChange={set("pickupEmail")} error={errors.pickupEmail} />
+        <Checkbox checked={data.pickupEmailOptIn || false} onChange={set("pickupEmailOptIn")}>
+          Join our email community and be the first to know about promotions, special offers, limited-time sweets, and new candies! | <span style={{ textDecoration: "underline" }}>Privacy Policy</span>
+        </Checkbox>
+      </div>
+
+      {/* 2. PERSON PICKING UP ORDER — name + phone */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px", textTransform: "uppercase" }}>Person Picking Up Order</span>
+          <span style={{ fontFamily: css.sans, fontStyle: "italic", fontSize: 12, color: css.black, whiteSpace: "nowrap", flexShrink: 0, paddingTop: 4 }}>* Required Fields</span>
+        </div>
+        <Input label="First Name" required value={data.pickupFirstName || ""} onChange={set("pickupFirstName")} error={errors.pickupFirstName} />
+        <Input label="Last Name" required value={data.pickupLastName || ""} onChange={set("pickupLastName")} error={errors.pickupLastName} />
+        <Input label="Phone" required type="tel" value={data.pickupPhone || ""} onChange={set("pickupPhone")} error={errors.pickupPhone} />
+      </div>
+
+      {/* 3. Pick Up Location card */}
+      <div style={{ border: `1px solid ${css.gray100}`, padding: 24 }}>
+        <div style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px" }}>
+          <div style={{ fontWeight: 700 }}>Pick Up Location:</div>
+          <div>112 Caruso Ave</div>
+          <div>Americana At Brand</div>
+          <div>Glendale, CA 91210</div>
+          <div>Phone (714) 232-1281</div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+// ─── SHIPPING METHOD ──────────────────────────────────────────────────────────
+function ShippingMethod({ value, onChange }) {
+  const options = [
+    { id: "standard", label: "Tue, Dec. 29 – Thu, Jan. 3", sub: "Standard Shipping", price: "$6.95", originalPrice: "$11.95", highlighted: true },
+    { id: "calendar", label: "Select Date From Calendar", sub: "Future Delivery or Special Day", price: "From $6.95", originalPrice: null, highlighted: false },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, ...slideDown }}>
+      <div style={{ padding: "12px 16px", background: css.gray50 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <ShipIcon />
+          <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black }}>
+            Add <strong>$12.75</strong> more for <span style={{ color: css.highlight, fontWeight: 700 }}>FREE</span> Standard Shipping
+          </span>
+        </div>
+        <button style={{ marginTop: 12, width: "100%", height: 40, background: css.white, border: `1px solid ${css.secondary}`, fontFamily: css.sans, fontWeight: 700, fontSize: 14, textTransform: "uppercase", cursor: "pointer" }}>
+          See Products
+        </button>
+      </div>
+      {options.map(opt => (
+        <div
+          key={opt.id}
+          onClick={() => onChange(opt.id)}
+          style={{
+            padding: 16, cursor: "pointer",
+            border: value === opt.id
+              ? (opt.highlighted ? `2px solid ${css.highlight}` : `2px solid ${css.black}`)
+              : `1px solid ${css.gray100}`,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            transition: "border-color 0.2s",
+          }}
+        >
+          <div>
+            <div style={{ fontFamily: css.sans, fontSize: 16, color: css.black }}>{opt.label}</div>
+            <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, marginTop: 2 }}>{opt.sub}</div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 12 }}>
+            {opt.originalPrice && <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, textDecoration: "line-through" }}>{opt.originalPrice}</div>}
+            <div style={{ fontFamily: css.sans, fontSize: 16, color: opt.highlighted ? css.sale : css.black, fontWeight: opt.highlighted ? 700 : 400 }}>{opt.price}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── GIFT MESSAGE ─────────────────────────────────────────────────────────────
+function GiftMessage({ value, onChange }) {
+  const maxLen = 150;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+          <path d="M22.7126 7.60088C22.4494 7.32012 22.0458 7.14464 21.6422 7.14464H16.4129C17.2201 6.47782 18.1853 4.88097 17.3605 3.28412C16.9745 2.52956 16.2024 2.05577 15.3074 2.00312C14.2019 1.95048 13.0964 2.56466 12.3594 3.72281C12.219 3.93339 12.1137 4.17906 12.0084 4.40718C11.9032 4.17906 11.7979 3.93339 11.6575 3.72281C10.9205 2.56466 9.85006 1.95048 8.70945 2.00312C7.81451 2.05577 7.0424 2.52956 6.65635 3.28412C5.84915 4.88097 6.79673 6.47782 7.60393 7.14464H2.37468C1.97108 7.14464 1.56748 7.32012 1.30426 7.58334C1.09369 7.82901 0.970854 8.12732 1.00595 8.42563L1.26917 11.4965C1.32181 12.1107 1.88334 12.5845 2.56771 12.5845H2.6028L3.18188 21.4812C3.21698 22.1129 3.8136 22.6218 4.53306 22.6218H19.6418C20.3612 22.6218 20.9578 22.1305 20.9929 21.4812L21.572 12.5669C22.2037 12.5143 22.6951 12.0931 22.7477 11.514L22.9934 8.44318C23.0285 8.12732 22.9232 7.82901 22.6951 7.58334L22.7126 7.60088ZM13.1841 4.2668C13.7281 3.40695 14.5002 2.95071 15.2723 2.9858C15.8163 3.0209 16.2901 3.30166 16.5007 3.74036C17.0622 4.84587 16.3603 5.98648 15.7637 6.44273C15.132 6.93407 14.3423 7.10954 13.7457 7.16219H12.763C12.6577 7.16219 12.5524 7.14464 12.4822 7.12709C12.3945 6.07422 12.6226 5.09154 13.149 4.28434L13.1841 4.2668ZM8.2532 6.42518C7.67413 5.96894 6.95467 4.82833 7.5162 3.72281C7.74432 3.28412 8.20056 3.00335 8.74454 2.96826C8.77964 2.96826 8.81474 2.96826 8.83228 2.96826C9.56929 2.96826 10.3063 3.4245 10.8327 4.24925C11.3592 5.074 11.5873 6.05667 11.4996 7.092C11.4294 7.092 11.3416 7.10954 11.2188 7.12709H10.2361C9.63948 7.07445 8.84983 6.89897 8.21811 6.40763L8.2532 6.42518ZM2.21675 11.4439L1.95353 8.37299C1.95353 8.37299 1.97108 8.28525 2.00618 8.25015C2.07637 8.16241 2.21675 8.10977 2.35713 8.10977H9.83251L9.88515 11.6193H2.56771C2.37468 11.6193 2.2343 11.514 2.2343 11.4263L2.21675 11.4439ZM4.14701 21.4286L3.56793 12.602H9.92025L10.0606 21.6567H4.53306C4.32249 21.6567 4.14701 21.5339 4.14701 21.4286ZM20.0278 21.4286C20.0278 21.5339 19.8523 21.6567 19.6418 21.6567H14.1142L14.2546 12.602H20.6069L20.0278 21.4286ZM21.8001 11.4439C21.8001 11.5316 21.6598 11.6369 21.4667 11.6369H14.2897L14.3423 8.12732H21.6597C21.8001 8.12732 21.9405 8.17996 22.0107 8.2677C22.0283 8.28525 22.0634 8.33789 22.0634 8.39054L21.8001 11.4614V11.4439Z" fill="black"/>
+        </svg>
+        <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black }}>ADD FREE GIFT MESSAGE</span>
+      </div>
+      <div style={{ position: "relative" }}>
+        <textarea
+          value={value}
+          onChange={e => onChange(e.target.value.slice(0, maxLen))}
+          placeholder="Add a sweet note & include your name."
+          rows={2}
+          style={{
+            width: "100%", padding: 16, border: `1px solid ${css.gray300}`,
+            fontFamily: css.sans, fontSize: 16, color: css.black,
+            resize: "vertical", outline: "none", boxSizing: "border-box",
+            lineHeight: "24px",
+          }}
+        />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary }}>{value.length}/{maxLen}</span>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button style={{ height: 40, padding: "0 16px", border: `1px solid ${value.length > 0 ? css.black : css.gray300}`, background: css.white, fontFamily: css.sans, fontWeight: 700, fontSize: 14, textTransform: "uppercase", cursor: value.length > 0 ? "pointer" : "default", color: value.length > 0 ? css.black : css.gray300 }}>
+            Save
+          </button>
+          {value.length > 0 && (
+            <button style={{ background: "none", border: "none", fontFamily: css.sans, fontSize: 14, color: css.black, textDecoration: "underline", cursor: "pointer" }}>
+              Save to All Recipients
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PRODUCT THUMB — candy-themed placeholder image ──────────────────────────
+const CANDY_PALETTES = [
+  { bg: "#8B1A1A", stripe: "#c0392b", label: "AC" }, // dark chocolate red
+  { bg: "#3d2b1f", stripe: "#6b3a2a", label: "LD" }, // lemon drop brown
+  { bg: "#b5451b", stripe: "#e8622a", label: "TR" }, // toffee orange
+  { bg: "#1a3a4c", stripe: "#2e6080", label: "SC" }, // dark navy
+  { bg: "#4a2060", stripe: "#6b3591", label: "NT" }, // purple nut
+];
+function ProductThumb({ index = 0, size = 84 }) {
+  const p = CANDY_PALETTES[index % CANDY_PALETTES.length];
+  const stripeW = size * 0.18;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block", flexShrink: 0 }}>
+      <rect width={size} height={size} fill={p.bg}/>
+      {/* diagonal candy stripes */}
+      {[-2,-1,0,1,2,3].map(i => (
+        <line key={i}
+          x1={i * stripeW * 3 - size} y1="0"
+          x2={i * stripeW * 3 + size * 2} y2={size}
+          stroke={p.stripe} strokeWidth={stripeW} strokeOpacity="0.45"
+        />
+      ))}
+      {/* ribbon bow */}
+      <circle cx={size/2} cy={size/2} r={size*0.22} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={size*0.04}/>
+      <text x={size/2} y={size/2 + size*0.07} textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize={size*0.2} fontFamily="Georgia,serif" fontWeight="bold">{p.label}</text>
+    </svg>
+  );
+}
+
+// ─── RECIPIENT TOTAL ACCORDION ───────────────────────────────────────────────
+function RecipientTotalAccordion({ items }) {
+  const [open, setOpen] = useState(false);
+  const itemCount = items.length;
+  const subtotal = "$70.00";
+  const shippingOrig = "$11.95";
+  const shippingDisc = "$6.95";
+  const tax = "$3.56";
+  const total = "$80.51";
+
+  const Chevron = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+      style={{ transform: open ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.2s", flexShrink: 0 }}>
+      <path d="M9 18L15 12L9 6" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+
+  return (
+    <div style={{ marginTop: 16, background: css.gray50, padding: 12, display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header row — always visible */}
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", cursor: "pointer" }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, textTransform: "uppercase", lineHeight: "24px" }}>RECIPIENT TOTAL:</span>
+          <span style={{ fontFamily: css.sans, fontSize: 12, color: css.secondary, lineHeight: "16px" }}>{itemCount} items</span>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px" }}>{total}</span>
+          <Chevron />
+        </div>
+      </div>
+
+      {/* Collapsed: thumbnail strip — 6 equal slots, flex-fill */}
+      {!open && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", width: "100%" }}>
+          {/* Real item tiles */}
+          {items.map((item, i) => (
+            <div key={i} style={{ position: "relative", flex: "1 0 0", minWidth: 0, minHeight: 0 }}>
+              <div style={{ aspectRatio: "1 / 1", overflow: "hidden", width: "100%" }}>
+                <ProductThumb index={i} size={60} />
+              </div>
+              <div style={{
+                position: "absolute", top: -8, right: -6,
+                width: 18, height: 18, borderRadius: "100px",
+                background: css.black, display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <span style={{ fontFamily: css.sans, fontSize: 11, color: css.white, lineHeight: "1.5" }}>1</span>
+              </div>
+            </div>
+          ))}
+          {/* Ghost tiles to fill remaining slots (always 6 total) */}
+          {Array.from({ length: Math.max(0, 6 - items.length) }).map((_, i) => (
+            <div key={`ghost-${i}`} style={{ flex: "1 0 0", minWidth: 0, opacity: 0 }}>
+              <div style={{ aspectRatio: "1 / 1", width: "100%" }} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Expanded: full item list + pricing */}
+      {open && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 8 }}>
+          {/* Items */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {items.map((item, i) => (
+              <div key={i} style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                <div style={{ width: 84, height: 84, flexShrink: 0, overflow: "hidden" }}><ProductThumb index={i} size={84} /></div>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ display: "flex", gap: 16, justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <span style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px" }}>{item.name}</span>
+                      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                        <span style={{ fontFamily: css.sans, fontSize: 11, color: css.secondary, lineHeight: "14px" }}>{item.sku}</span>
+                        <span style={{ fontFamily: css.sans, fontSize: 11, color: css.secondary, lineHeight: "14px" }}>{item.size}</span>
+                      </div>
+                      {/* Qty selector */}
+                      <div style={{ display: "inline-flex", border: `1px solid ${css.secondary}`, background: css.white }}>
+                        <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 12H19" stroke="#111" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                        </button>
+                        <div style={{ minWidth: 45, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontFamily: css.sans, fontSize: 18, color: css.black, lineHeight: "24px" }}>1</span>
+                        </div>
+                        <button style={{ padding: 8, background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="#111" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 16 }}>
+                      <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black, lineHeight: "20px", textDecoration: "underline", cursor: "pointer" }}>Remove</span>
+                      {item.salePrice ? (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                          <span style={{ fontFamily: css.sans, fontSize: 16, color: css.secondary, lineHeight: "24px", textDecoration: "line-through" }}>{item.origPrice}</span>
+                          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.sale, lineHeight: "20px" }}>{item.salePrice}</span>
+                        </div>
+                      ) : (
+                        <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "20px" }}>{item.price}</span>
+                      )}
+                    </div>
+                  </div>
+                  <span style={{ fontFamily: css.sans, fontSize: 12, color: css.secondary, lineHeight: "16px" }}>
+                    This item must be scheduled for delivery on or before February 21st
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: css.gray100 }} />
+
+          {/* Pricing breakdown */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontSize: 16, color: css.secondary, lineHeight: "24px" }}>Subtotal:</span>
+              <span style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px" }}>{subtotal}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Shipping:</span>
+              <span style={{ fontFamily: css.sans, fontSize: 14, lineHeight: "20px" }}>
+                <span style={{ textDecoration: "line-through", color: css.black }}>{shippingOrig}</span>
+                {"  "}
+                <span style={{ fontWeight: 700, color: css.sale }}>{shippingDisc}</span>
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Sales Tax:</span>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black, lineHeight: "20px" }}>{tax}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px" }}>Shipment Total:</span>
+              <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px" }}>{total}</span>
+            </div>
+          </div>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── RECIPIENT CARD (DELIVERY STEP) ──────────────────────────────────────────
+function RecipientCardDelivery({ recipient, index, isExpanded, onExpand, onUpdate, onRemove, isOnly, showErrors, onPickupSelected }) {
+  const [addr, setAddr] = useState(recipient.address || { addressType: "home", firstName: "", lastName: "", street: "", unit: "", city: "", state: "", zip: "", phone: "", isResidence: true, useBilling: index === 0, poBox: false });
+  const [pickupData, setPickupData] = useState(recipient.storeData || {});
+  const [shippingMethod, setShippingMethod] = useState(recipient.shippingMethod || "standard");
+  const [giftMsg, setGiftMsg] = useState(recipient.giftMessage || "");
+  const [email, setEmail] = useState(recipient.email || "");
+  const [emailOptIn, setEmailOptIn] = useState(recipient.emailOptIn || false);
+
+  // Field-level errors shown when parent triggers validation
+  const errors = showErrors && recipient.fulfillment !== "bopis" ? {
+    firstName: !addr.firstName ? "Required" : "",
+    lastName: !addr.lastName ? "Required" : "",
+    street: !addr.street ? "Required" : "",
+    city: !addr.city ? "Required" : "",
+    state: !addr.state ? "Required" : "",
+    zip: !addr.zip ? "Required" : "",
+    phone: !addr.phone ? "Required" : "",
+  } : {};
+  const emailError = showErrors && index === 0 && recipient.fulfillment !== "bopis" && !email ? "Required" : "";
+
+  const addrComplete = addr.firstName && addr.lastName && addr.street && addr.city && addr.state && addr.zip && addr.phone;
+  const storeComplete = pickupData.pickupFirstName && pickupData.pickupLastName && pickupData.pickupPhone && pickupData.pickupEmail;
+  const fulfillmentComplete = recipient.fulfillment === "ship" ? (addrComplete && shippingMethod) : storeComplete;
+  const isComplete = fulfillmentComplete && (index === 0 && recipient.fulfillment !== "bopis" ? !!email : true);
+
+  // Save back up when user finishes
+  useEffect(() => {
+    if (isComplete) {
+      onUpdate({ ...recipient, address: addr, storeData: pickupData, shippingMethod, giftMessage: giftMsg, email, emailOptIn, isComplete: true });
+    }
+  }, [addr, pickupData, shippingMethod, giftMsg, email, emailOptIn]);
+
+  const handleFulfillmentChange = (type) => {
+    onUpdate({ ...recipient, fulfillment: type, isComplete: false });
+    setShippingMethod("standard");
+    // Pickup is single-recipient only — parent will trim via onFulfillmentChange
+    if (type === "bopis" && onPickupSelected) onPickupSelected();
+  };
+
+  // Summary for collapsed state
+  const recipientName = addr.firstName && addr.lastName ? `${addr.firstName} ${addr.lastName}` : `Recipient ${index + 1}`;
+  const summaryAddr = addr.city && addr.state ? `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}` : "";
+  const storeName = pickupData.pickupFirstName ? `${pickupData.pickupFirstName || ""} ${pickupData.pickupLastName || ""}`.trim() : "";
+  const cardRef = useRef(null);
+
+  const handleExpand = () => {
+    const willExpand = !isExpanded;
+    onExpand(willExpand ? index : null);
+    if (willExpand) {
+      setTimeout(() => {
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+  };
+
+  return (
+    <div ref={cardRef} style={{ border: `1px solid ${!isOnly && isExpanded ? css.black : css.gray100}`, transition: "border-color 0.2s", scrollMarginTop: 16 }}>
+      {/* Card Header — accordion, only for multi-recipient */}
+      {!isOnly && (
+        <div
+          style={{ padding: isExpanded ? "16px 12px 0" : "16px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}
+          onClick={handleExpand}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Top label row: RECIPIENT N + pill badge */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isExpanded ? 0 : 12 }}>
+              <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, textTransform: "uppercase", lineHeight: "24px", whiteSpace: "nowrap" }}>
+                Recipient {index + 1}
+              </span>
+              {isComplete && !isExpanded && addr.useBilling && (
+                <span style={{ background: css.gray100, padding: "2px 6px", fontFamily: css.sans, fontSize: 11, color: css.black, lineHeight: "24px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  Billing Address
+                </span>
+              )}
+            </div>
+            {/* Collapsed summary */}
+            {isComplete && !isExpanded && (
+              <>
+                <div style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px", marginBottom: 4 }}>
+                  {recipientName}
+                </div>
+                {recipient.fulfillment === "bopis" ? (
+                  <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Pickup: {storeName}</div>
+                ) : (
+                  <>
+                    <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>
+                      {addr.street}{addr.zip ? `, ${addr.zip}` : ""}{addr.phone ? `, ${addr.phone}` : ""}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginTop: 8 }}>
+                      <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black, lineHeight: "20px" }}>Standard Shipping</span>
+                      <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Dec. 29 – Jan. 3</span>
+                    </div>
+                  </>
+                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                  {[1, 2].map(n => (
+                    <div key={n} style={{ position: "relative", flex: "1 0 0", maxWidth: 60, overflow: "hidden" }}>
+                      <div style={{ aspectRatio: "1/1" }}><ProductThumb index={n - 1} size={60} /></div>
+                      <div style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, background: css.black, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <span style={{ fontFamily: css.sans, fontSize: 11, color: "#fff", lineHeight: 1 }}>{n}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {[3,4,5,6].map(n => <div key={n} style={{ flex: "1 0 0", maxWidth: 60, opacity: 0 }}><div style={{ aspectRatio: "1/1" }} /></div>)}
+                </div>
+              </>
+            )}
+            {!isComplete && !isExpanded && (
+              <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Click to fill in details</div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexShrink: 0, marginLeft: 12 }}>
+            {isComplete && !isExpanded && (
+              <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 14, color: css.black, lineHeight: "20px", whiteSpace: "nowrap" }}>$80.51</span>
+            )}
+            <svg aria-hidden="true" style={{ width: 10, height: 16, marginTop: 4, transform: isExpanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.25s" }} viewBox="0 0 10 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 2l6 6-6 6" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+        </div>
+      )}
+
+      {/* Single-recipient title — no number, no accordion */}
+      {isOnly && (
+        <div style={{ padding: "16px 12px 0" }}>
+          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, textTransform: "uppercase", lineHeight: "24px" }}>
+            Recipient
+          </span>
+        </div>
+      )}
+
+      {/* Card Body — always open for single recipient, accordion-gated for multi */}
+      {(isOnly || isExpanded) && (
+        <div style={{ padding: `${index === 0 ? 20 : 12}px 12px 20px`, ...(isOnly ? {} : slideDown) }}>
+          {/* Fulfillment toggle — only for first recipient; pickup locks to single recipient */}
+          {index === 0 && <FulfillmentToggle value={recipient.fulfillment || "ship"} onChange={handleFulfillmentChange} multipleRecipients={!isOnly} />}
+          {index === 0 && <div style={{ marginTop: 16 }} />}
+
+          {/* Contact section — only for first recipient, and only for shipping (pickup collects email in person form) */}
+          {index === 0 && recipient.fulfillment !== "bopis" && <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, textTransform: "uppercase", lineHeight: "24px" }}>Contact</span>
+              <span style={{ fontFamily: css.sans, fontStyle: "italic", fontSize: 12, color: css.black }}>* Required Fields</span>
+            </div>
+            <Input label="Email" required value={email} onChange={setEmail} placeholder="" error={emailError} />
+            <Checkbox checked={emailOptIn} onChange={setEmailOptIn}>
+              Join our email community and be the first to know about promotions, special offers, limited-time sweets, and new candies! | <span style={{ textDecoration: "underline" }}>Privacy Policy</span>
+            </Checkbox>
+          </div>}
+
+          {recipient.fulfillment === "bopis" ? (
+            <PickupForm data={pickupData} onChange={setPickupData} errors={showErrors && recipient.fulfillment === "bopis" ? {
+              pickupFirstName: !pickupData.pickupFirstName ? "Required" : "",
+              pickupLastName: !pickupData.pickupLastName ? "Required" : "",
+              pickupPhone: !pickupData.pickupPhone ? "Required" : "",
+              pickupEmail: !pickupData.pickupEmail ? "Required" : "",
+            } : {}} />
+          ) : (
+            <>
+              <AddressForm data={addr} onChange={setAddr} errors={errors} />
+              <div style={{ marginTop: 20 }}>
+                <GiftMessage value={giftMsg} onChange={setGiftMsg} />
+              </div>
+              <div style={{ marginTop: 20, marginBottom: 8 }}>
+                <div style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, marginBottom: 12 }}>SHIPPING METHOD OR DELIVERY DATE</div>
+                {addrComplete ? (
+                  <ShippingMethod value={shippingMethod} onChange={setShippingMethod} />
+                ) : (
+                  <div style={{ background: css.gray50, padding: 20 }}>
+                    <p style={{ fontFamily: css.sans, fontSize: 16, color: css.black, textAlign: "center", lineHeight: "24px", margin: 0 }}>
+                      Enter your shipping address to view available shipping methods.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Gift message for BOPIS */}
+          {recipient.fulfillment === "bopis" && storeComplete && (
+            <div style={{ marginTop: 20 }}>
+              <GiftMessage value={giftMsg} onChange={setGiftMsg} />
+            </div>
+          )}
+
+          {/* Recipient total accordion — always visible, collapsed by default */}
+          <RecipientTotalAccordion
+            items={[
+              { name: "Assorted Chocolates", sku: "#500310", size: "1 lb", price: "$29.50" },
+              { name: "Lemon Drops", sku: "#500310", size: "8 oz", price: "$11.00", salePrice: "$40.50", origPrice: "$45.00" },
+            ]}
+          />
+
+          {/* Remove Recipient — always visible below the total, only when not the only recipient */}
+          {!isOnly && (
+            <span
+              onClick={onRemove}
+              style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px", textDecoration: "underline", cursor: "pointer", display: "inline-block", marginTop: 4 }}
+            >
+              Remove Recipient
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ORDER SUMMARY MINI ───────────────────────────────────────────────────────
+function OrderSummaryMini({ recipients }) {
+  const shippingTotal = recipients.filter(r => r.shippingMethod).length * 6.95;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <Divider />
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: css.sans, fontSize: 16, color: css.secondary }}>Subtotal:</span>
+        <span style={{ fontFamily: css.sans, fontSize: 16, color: css.black }}>$40.50</span>
+      </div>
+      <Divider />
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary }}>Shipping:</span>
+        <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black }}>{shippingTotal > 0 ? `$${shippingTotal.toFixed(2)}` : "TBD"}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary }}>Sales Tax:</span>
+        <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black }}>TBD</span>
+      </div>
+      <Divider />
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black }}>Order Total:</span>
+        <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black }}>${(40.50 + shippingTotal).toFixed(2)}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── PAYMENT SECTION ──────────────────────────────────────────────────────────
+function PaymentSection({ data, onChange, errors = {} }) {
+  const set = f => v => onChange({ ...data, [f]: v });
+
+  const paymentMethods = [
+    { id: "credit", label: "Credit/Debit", icons: ["VISA", "MC", "AMEX", "DISC"] },
+    { id: "paypal", label: "PayPal", icon: null },
+    { id: "klarna", label: "Pay over time with Klarna", sub: "4 interest-free payments", klarna: true },
+    { id: "venmo", label: "Venmo", venmo: true },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Gift Card */}
+      <div>
+        <div style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, marginBottom: 12 }}>PAY BY GIFT CARD</div>
+        <Checkbox checked={data.useGiftCard} onChange={set("useGiftCard")} label="Apply a Gift Card" />
+        {data.useGiftCard && (
+          <div style={{ marginTop: 12, ...slideDown }}>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input placeholder="Gift card number" style={{ flex: 1, height: 40, padding: "0 16px", border: `1px solid ${css.gray300}`, fontFamily: css.sans, fontSize: 16, outline: "none" }} />
+              <button style={{ height: 40, padding: "0 16px", background: css.black, color: css.white, border: "none", fontFamily: css.sans, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Apply</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Payment method */}
+      <div>
+        <div style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, marginBottom: 12 }}>SELECT PAYMENT METHOD</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {paymentMethods.map(pm => (
+            <div key={pm.id}>
+              <div
+                onClick={() => set("method")(pm.id)}
+                style={{
+                  padding: 16,
+                  border: data.method === pm.id ? `1px solid ${css.black}` : `1px solid ${css.gray100}`,
+                  background: data.method === pm.id ? css.gray50 : css.white,
+                  cursor: "pointer", transition: "border-color 0.2s",
+                }}
+              >
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <div style={{
+                    width: 20, height: 20, flexShrink: 0, borderRadius: "50%",
+                    border: data.method === pm.id ? `2px solid ${css.black}` : `1px solid ${css.gray300}`,
+                    display: "flex", alignItems: "center", justifyContent: "center", background: css.white,
+                  }}>
+                    {data.method === pm.id && <div style={{ width: 10, height: 10, background: css.black, borderRadius: "50%" }} />}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 14, color: css.black }}>{pm.label}</div>
+                    {pm.sub && <div style={{ fontFamily: css.sans, fontSize: 12, color: css.secondary, marginTop: 2 }}>{pm.sub}</div>}
+                  </div>
+                  {pm.klarna && <div style={{ width: 39, height: 24, background: KLARNA_PINK, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 11, color: "#000" }}>Klarna</span></div>}
+                  {pm.venmo && <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 14, color: "#3D95CE" }}>venmo</span>}
+                  {pm.id === "paypal" && <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 14, color: "#003087" }}>Pay<span style={{ color: "#009cde" }}>Pal</span></span>}
+                  {pm.id === "credit" && (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {["VISA","MC","AMEX","DISC"].map(c => (
+                        <div key={c} style={{ width: 32, height: 20, background: c === "VISA" ? "#0e4595" : c === "MC" ? "#eb001b" : c === "AMEX" ? "#2e77bc" : "#fff", border: c === "DISC" ? "0.5px solid #ccc" : "none", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 7, color: c === "DISC" ? "#ff6000" : "#fff", letterSpacing: "-0.5px" }}>{c}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Credit card fields */}
+                {data.method === "credit" && pm.id === "credit" && (
+                  <div id="payment-error-card" style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12, ...slideDown }}>
+                    <Input label="Credit Card Number" required value={data.cardNumber || ""} onChange={set("cardNumber")} placeholder="•••• •••• •••• ••••" error={errors.cardNumber} />
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <Input label="Expiration Date" required value={data.expiry || ""} onChange={set("expiry")} placeholder="MM/YY" error={errors.expiry} />
+                      <Input label="Security Code" required value={data.cvv || ""} onChange={set("cvv")} placeholder="CVV" error={errors.cvv} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── BILLING ADDRESS SECTION ──────────────────────────────────────────────────
+function BillingSection({ data, onChange, firstRecipientAddr, errors = {} }) {
+  const set = f => v => onChange({ ...data, [f]: v });
+  const addr = firstRecipientAddr;
+  const addrStr = addr?.city ? `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}` : "—";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div id="payment-error-billing" style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black }}>BILLING ADDRESS</div>
+      <Checkbox checked={data.sameAsShipping !== false} onChange={v => set("sameAsShipping")(v)} label={`Use shipping address (${addrStr.slice(0, 30)}...)`} />
+      {data.sameAsShipping !== false && addr?.firstName && (
+        <div style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px" }}>
+          <div style={{ fontWeight: 700 }}>{addr.firstName} {addr.lastName}</div>
+          <div>{addr.street}</div>
+          {addr.unit && <div>{addr.unit}</div>}
+          <div>{addr.city}, {addr.state} {addr.zip}</div>
+        </div>
+      )}
+      {data.sameAsShipping === false && (
+        <div style={{ ...slideDown }}>
+          <AddressForm data={data.billingAddr || { addressType: "home", firstName: "", lastName: "", street: "", city: "", state: "", zip: "", phone: "", isResidence: false, useBilling: false, poBox: false }} onChange={v => set("billingAddr")(v)} errors={{ firstName: errors.billingFirstName, lastName: errors.billingLastName, street: errors.billingStreet, city: errors.billingCity, state: errors.billingState, zip: errors.billingZip, phone: errors.billingPhone }} />
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div id="payment-error-terms">
+          <Checkbox checked={data.termsAgreed} onChange={v => { set("termsAgreed")(v); }} label="I agree to Terms & Conditions and Privacy Policy *" />
+          {errors.termsAgreed && <div style={{ fontFamily: "Roboto,sans-serif", fontSize: 12, color: "#bf0000", marginTop: 4, marginLeft: 32 }}>You must agree to continue</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── RECIPIENT REVIEW CARD (PAYMENT STEP) ────────────────────────────────────
+function RecipientReviewCard({ recipient, index, onRemove }) {
+  const [expanded, setExpanded] = useState(false);
+  const addr = recipient.address || {};
+  const name = addr.firstName ? `${addr.firstName} ${addr.lastName}` : `Recipient ${index + 1}`;
+  const addrLine = addr.city
+    ? [addr.street, addr.city, addr.state, addr.zip].filter(Boolean).join(", ") + (addr.phone ? `, ${addr.phone}` : "")
+    : (recipient.storeData?.pickupFirstName ? `${recipient.storeData.pickupFirstName} ${recipient.storeData.pickupLastName || ""}`.trim() : "Pickup");
+
+  const items = recipient.items || [
+    { name: "Assorted Chocolates", sku: "#500310", size: "1 lb", qty: 2, price: "$29.50" },
+    { name: "Lemon Drops", sku: "#500310", size: "8 oz", qty: 2, price: "$11.00" },
+  ];
+  const itemCount = items.reduce((s, it) => s + it.qty, 0);
+  const subtotal = "$70.00";
+  const shippingOrig = "$11.95";
+  const shippingDisc = "$6.95";
+  const tax = "$3.56";
+  const total = "$80.51";
+
+  // Chevron SVG (down when collapsed, up when expanded)
+  const Chevron = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
+      style={{ transform: expanded ? "rotate(-90deg)" : "rotate(90deg)", transition: "transform 0.2s", flexShrink: 0 }}>
+      <path d="M9 18L15 12L9 6" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+
+  return (
+    <div style={{ border: `1px solid ${css.gray100}` }}>
+      {/* ── COLLAPSED: top header row — always visible ── */}
+      {/* Figma node 78090:90720 — px:12 py:16, gap:12 between left col and right group */}
+      <div
+        onClick={() => setExpanded(e => !e)}
+        style={{ padding: "16px 12px", display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }}
+      >
+        {/* Left: label + name, gap:12 */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 14, color: css.black, textTransform: "uppercase", lineHeight: "24px" }}>
+            RECIPIENT {index + 1}
+          </span>
+          <span style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px" }}>{name}</span>
+        </div>
+        {/* Right: price + chevron, gap:8 */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+          <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 14, color: css.black, lineHeight: "20px" }}>{total}</span>
+          <Chevron />
+        </div>
+      </div>
+
+      {/* ── COLLAPSED body: address + shipping + thumbnails ── */}
+      {/* Figma node 78090:90733 — pb:12 px:12 gap:16 */}
+      {!expanded && (
+        <div style={{ paddingBottom: 12, paddingLeft: 12, paddingRight: 12, display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Address — 14/Regular, secondary */}
+          {addrLine && (
+            <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>{addrLine}</div>
+          )}
+          {/* Shipping + date — gap:8, items aligned bottom */}
+          {/* Figma node 78090:90735 — gap:8 items-end */}
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black, lineHeight: "20px" }}>Standard Shipping</span>
+            <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Dec. 29 - Jan. 3</span>
+          </div>
+          {/* Thumbnails grid — flex-wrap gap:12 */}
+          {/* Figma node 78090:90738 — flex-wrap gap:12 */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", width: "100%" }}>
+            {items.map((item, i) => (
+              <div key={i} style={{ position: "relative", flex: "1 0 0", minWidth: 0, overflow: "hidden" }}>
+                <div style={{ aspectRatio: "1 / 1", width: "100%" }}><ProductThumb index={i} size={60} /></div>
+                <div style={{
+                  position: "absolute", top: -8, right: -6,
+                  width: 18, height: 18, borderRadius: "100px",
+                  background: css.black, display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <span style={{ fontFamily: css.sans, fontSize: 11, color: css.white, lineHeight: "1.5" }}>{item.qty}</span>
+                </div>
+              </div>
+            ))}
+            {Array.from({ length: Math.max(0, 6 - items.length) }).map((_, i) => (
+              <div key={`ghost-${i}`} style={{ flex: "1 0 0", minWidth: 0, opacity: 0 }}>
+                <div style={{ aspectRatio: "1 / 1", width: "100%" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── EXPANDED body ── */}
+      {/* Figma node 78090:90884 — pt:16 pb:20 px:12 gap:24 (outer column) */}
+      {expanded && (
+        <div style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 20, display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Address — 14/Regular secondary */}
+          {addrLine && (
+            <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>{addrLine}</div>
+          )}
+
+          {/* Shipping + date — gap:8 items-end */}
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black, lineHeight: "20px" }}>Standard Shipping</span>
+            <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Dec. 29 - Jan. 3</span>
+          </div>
+
+          {/* Gift message — gap:12 */}
+          {recipient.giftMessage && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black, lineHeight: "20px" }}>Gift Message</span>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>"{recipient.giftMessage}"</span>
+            </div>
+          )}
+
+          {/* Recipient Total label — gap:8 items baseline */}
+          <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+            <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, textTransform: "uppercase", lineHeight: "24px" }}>RECIPIENT TOTAL:</span>
+            <span style={{ fontFamily: css.sans, fontSize: 12, color: css.secondary, lineHeight: "16px" }}>{itemCount} items</span>
+          </div>
+
+          {/* Items list — gap:24 between items */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {items.map((item, i) => (
+              <div key={i} style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                <div style={{ width: 84, height: 84, flexShrink: 0, overflow: "hidden" }}><ProductThumb index={i} size={84} /></div>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", gap: 16, justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <span style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px" }}>{item.name}</span>
+                      <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                        <span style={{ fontFamily: css.sans, fontSize: 12, color: css.secondary, lineHeight: "16px" }}>{item.sku}</span>
+                        <span style={{ fontFamily: css.sans, fontSize: 12, color: css.secondary, lineHeight: "16px" }}>{item.size} | Qty: {item.qty}</span>
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "20px", whiteSpace: "nowrap" }}>{item.price}</span>
+                  </div>
+                  <span style={{ fontFamily: css.sans, fontSize: 12, color: css.secondary, lineHeight: "16px" }}>
+                    This item must be scheduled for delivery on or before February 21st
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: css.gray100 }} />
+
+          {/* Pricing breakdown — gap:16 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontSize: 16, color: css.secondary, lineHeight: "24px" }}>Subtotal:</span>
+              <span style={{ fontFamily: css.sans, fontSize: 16, color: css.black, lineHeight: "24px" }}>{subtotal}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Shipping:</span>
+              <span style={{ fontFamily: css.sans, fontSize: 14, lineHeight: "20px" }}>
+                <span style={{ textDecoration: "line-through", color: css.black }}>{shippingOrig}</span>
+                {"  "}
+                <span style={{ fontWeight: 700, color: css.sale }}>{shippingDisc}</span>
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>Sales Tax:</span>
+              <span style={{ fontFamily: css.sans, fontSize: 14, color: css.black, lineHeight: "20px" }}>{tax}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px" }}>Shipment Total:</span>
+              <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px" }}>{total}</span>
+            </div>
+          </div>
+
+          {/* Remove recipient */}
+          {onRemove && (
+            <div>
+              <span onClick={onRemove} style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px", textDecoration: "underline", cursor: "pointer" }}>
+                Remove Recipient
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HEADER ───────────────────────────────────────────────────────────────────
+function Header({ onBack }) {
+  return (
+    <div style={{ background: css.white, boxShadow: "0 8px 32px rgba(0,0,0,0.08)", padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+      {/* See's Candies logo — inline SVG from design */}
+      <svg width="141" height="20" viewBox="0 0 141 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="See's Candies">
+        <g clipPath="url(#seesLogoClip)">
+          <path d="M46.6387 18.4472C46.6387 18.4472 47.3669 18.1482 47.6245 18.1364C48.3261 18.1098 48.3113 18.2933 49.1727 18.4472C49.6523 18.5331 50.9163 18.5331 51.5084 18.4176C52.4232 18.243 53.7287 17.3756 54.4066 16.2803C54.7825 15.6705 54.969 14.2554 54.6049 13.243C54.3651 12.5769 52.9442 11.4697 51.3693 11.0227C50.9755 10.9102 48.6695 10.4603 48.6132 8.99786C48.5925 8.45316 48.7583 7.48217 50.9489 7.66275C51.4285 7.70124 51.766 8.01207 51.766 8.01207C51.766 8.01207 51.4847 8.20745 51.4285 8.51829C51.387 8.74031 51.1472 9.95405 52.3255 10.3359C52.6807 10.4514 53.1218 10.4839 53.4237 10.404C53.7257 10.3241 54.1431 9.97773 54.2378 9.67282C54.4066 9.137 54.377 8.67815 54.3237 8.49165C54.1845 8.01207 54.7381 7.32231 54.7381 7.32231L53.3616 6.25067C53.3616 6.25067 53.2195 6.39869 52.7488 6.49342C51.763 6.69176 50.8927 6.18555 49.7381 6.18555C49.2082 6.18555 47.9975 6.2566 47.3195 6.49342C45.1526 7.25423 45.2088 9.67578 45.2384 10.179C45.3776 12.4851 47.0946 13.1038 47.7636 13.2755C48.1751 13.3792 49.3148 13.7729 50.2651 14.1548C51.2124 14.5366 51.8459 14.9511 51.5972 16.2003C51.4285 17.044 49.7885 17.1477 49.5635 17.0736C49.3355 16.9967 48.5777 16.6118 48.6902 16.4194C48.8027 16.224 49.2911 14.5988 47.435 14.2613C46.5351 14.0985 45.7476 14.8534 45.6055 15.4721C45.5078 15.9043 45.5759 16.5319 45.5759 16.7658C45.5759 16.9996 45.3776 17.3578 45.3776 17.3578L46.6446 18.4561L46.6387 18.4472Z" fill="#111111"/>
+          <path d="M41.55 8.10102C41.55 8.10102 42.3907 8.13654 43.187 7.39646C43.9863 6.65342 44.3623 5.83341 44.3209 5.21766C44.2794 4.60487 44.1995 4.11345 43.6637 3.70789C43.1278 3.30232 42.669 3.22831 42.2486 3.2668C42.0207 3.28752 41.3546 3.56579 41.029 3.97136C40.7625 4.29995 40.6885 4.67 40.6915 5.11997C40.6915 5.56994 40.8484 6.06135 41.1178 6.3041C41.4908 6.64454 41.7246 6.78071 42.0947 6.93465C42.2309 6.99386 42.3818 7.01162 41.9378 7.54152C41.7158 7.81091 41.5441 8.10398 41.5441 8.10398L41.55 8.10102Z" fill="#111111"/>
+          <path d="M31.899 11.9488C31.7421 11.339 31.1856 9.15128 32.9796 8.47928C33.9772 8.10628 34.963 8.6421 35.4603 9.08615C36.0198 9.58645 36.3721 10.3473 36.3721 10.3473L32.2928 12.9908C32.2928 12.9908 32.053 12.5527 31.899 11.9488ZM32.9115 14.4799L38.471 10.8564C38.471 10.8564 39.2495 10.3798 39.5663 10.0512C39.6344 9.98017 39.7173 9.79071 39.7084 9.7315C39.664 9.47395 39.5337 9.11575 39.1134 8.54737C38.693 7.97899 37.6125 7.04056 36.8546 6.73269C35.0251 5.9926 32.275 6.19687 30.8363 7.0672C30.3449 7.3662 29.4124 8.1566 28.9239 8.88189C28.4325 9.60717 27.7516 11.3715 28.0358 13.1981C28.471 15.9778 30.1465 17.1442 30.9843 17.5971C31.8221 18.05 32.6983 18.3875 33.6871 18.4586C34.6758 18.5296 35.6527 18.5622 36.7895 18.1773C37.9292 17.7925 38.9861 16.8718 39.3265 16.3005C39.6669 15.7262 40.1465 14.9772 40.2028 14.6782C40.3182 14.0832 39.6817 13.7842 39.4153 13.8641C39.1489 13.9411 38.2341 15.6374 37.4378 16.0074C36.6089 16.3922 35.5254 16.6794 34.7409 16.4396C33.6456 16.1051 32.9174 14.4858 32.9174 14.4858L32.9115 14.4799Z" fill="#111111"/>
+          <path d="M-0.000945918 17.1795L1.37857 18.417C1.37857 18.417 2.87058 18.1002 3.37679 18.2068C4.17904 18.3755 5.51119 18.5058 5.93748 18.5857C6.36673 18.6656 7.86466 18.6508 8.6373 18.4999C11.4792 17.9522 12.8972 15.0748 13.1933 13.7189C13.3235 13.1239 13.7557 9.86457 10.4017 8.35184C9.1672 7.7953 6.16246 6.41578 5.65329 6.05166C5.14707 5.6905 3.71131 3.27191 5.5704 2.00193C6.74861 1.19968 8.66098 2.49334 8.66098 2.49334C8.66098 2.49334 7.63671 3.82253 8.23766 5.13692C8.54553 5.81188 9.22345 6.88056 11.3046 6.2204C12.2341 5.92437 12.5183 4.87937 12.5716 3.95575C12.6189 3.09133 11.9529 1.97233 12.1157 1.6082C12.1986 1.42466 12.2755 1.3477 12.2755 1.3477L10.6296 0.166523C10.6296 0.166523 9.80367 0.31454 9.36258 0.355984C8.54257 0.432953 5.59408 -0.656449 2.68704 0.637216C0.981884 1.40098 0.336532 3.25119 0.147071 4.10672C-0.0423906 4.96226 -0.0897559 7.30092 1.18023 8.45841C2.44725 9.61294 7.53902 11.4957 8.73203 12.9729C9.34186 13.7248 10.0405 16.1938 7.98603 16.8125C5.52895 17.5526 5.03162 16.5046 5.03162 16.5046C5.03162 16.5046 6.66276 13.636 4.32706 12.5111C1.272 11.0398 0.306929 13.8936 0.221079 14.4235C0.120428 15.0392 0.221079 15.5869 0.221079 16.1109C0.221079 16.7296 -0.00390625 17.1795 -0.00390625 17.1795H-0.000945918Z" fill="#111111"/>
+          <path d="M26.1827 14.4391C26.0732 14.2466 25.9607 14.0957 25.7031 14.0572C25.4456 14.0217 25.0193 14.3266 24.8742 14.596C24.7292 14.8653 24.3058 15.4456 23.7967 15.6854C23.3585 15.8926 22.6865 16.2656 21.5675 16.082C20.5521 15.9163 20.1466 15.4101 19.744 15.0785C19.4746 14.8565 18.9832 14.2348 18.9832 14.2348C18.9832 14.2348 25.5758 10.1051 25.635 10.0637C25.6942 10.0252 25.6706 9.90975 25.5581 9.52491C25.4456 9.14007 25.1288 8.62201 24.9423 8.35558C24.7588 8.08619 22.3313 4.85943 17.7132 6.74812C15.0992 7.81976 14.7854 10.0548 14.596 11.1176C14.3443 12.5356 14.8831 15.2976 16.0376 16.4787C16.982 17.4468 17.1862 17.7517 18.5184 18.1957C19.9542 18.6753 23.0832 18.6131 24.3828 17.5208C25.262 16.7807 25.6735 16.1235 25.9636 15.5847C26.2537 15.0459 26.2893 14.6226 26.1768 14.4302L26.1827 14.4391ZM18.3793 12.7073C18.3793 12.7073 17.9855 12.0382 17.9026 11.5024C17.6777 10.0607 18.1602 9.35913 18.5214 8.97429C19.2526 8.19572 20.9015 7.89377 21.8991 9.00685C22.059 9.18743 22.5622 10.1555 22.5622 10.1555L18.3822 12.7073H18.3793Z" fill="#111111"/>
+          <path d="M92.5094 14.2105L87.5686 6.23828H84.6231L84.6172 18.4733H85.828V10.1726L90.7747 18.4704H93.7705V6.32413H92.5065L92.5094 14.2105Z" fill="#111111"/>
+          <path d="M76.8922 6.24805L72.3984 18.4683L73.5915 18.4861L74.9739 15.1113H78.6595L79.9828 18.492H83.4671L78.7632 6.24805H76.8952H76.8922ZM75.4269 13.7495L76.8922 10.0787L78.3043 13.7495H75.4269Z" fill="#111111"/>
+          <path d="M68.2462 17.0532C68.2462 17.0532 68.2314 17.2634 68.0774 17.293C67.808 17.3404 66.5262 17.3226 66.2746 17.3226C66.023 17.3226 65.9697 16.9614 65.9697 16.9614L65.9519 7.85842C65.9519 7.85842 65.9105 7.64824 66.2124 7.59495C66.5144 7.54167 67.5831 7.58607 67.8347 7.58607C68.0863 7.58607 68.1396 7.666 68.1396 7.93243C68.1396 8.34392 68.1455 9.37115 68.1455 9.37115L71.2124 9.38595L71.2272 6.75422C71.2272 6.75422 71.2213 6.48187 71.0585 6.3753C70.8187 6.22136 70.6796 6.27761 70.4546 6.27761C70.0017 6.27761 63.6813 6.29537 63.6813 6.29537C63.6813 6.29537 63.2314 6.25392 63.0271 6.51443C62.8258 6.77494 62.888 7.31668 62.888 7.31668V17.7163C62.888 17.7163 62.9324 18.1101 63.184 18.3202C63.4356 18.5304 63.631 18.4683 63.9833 18.5215C64.3385 18.5748 70.345 18.4949 70.5967 18.5215C70.6529 18.5275 70.9342 18.486 71.1976 18.2048C71.4522 17.9324 71.4048 17.367 71.4048 17.0532C71.4048 16.7394 71.4196 15.4221 71.4196 15.4221L68.2699 15.4428L68.2491 17.0562L68.2462 17.0532Z" fill="#111111"/>
+          <path d="M136.241 9.39308V7.07218C136.241 7.07218 136.202 6.67845 135.974 6.52155C135.746 6.36466 135.406 6.32617 135.406 6.32617H127.277C127.277 6.32617 126.939 6.32617 126.711 6.60148C126.483 6.87679 126.519 7.309 126.519 7.309V12.2261C126.519 12.2261 126.516 12.6228 126.88 12.8478C127.206 13.0491 127.466 13.0935 127.466 13.0935H132.502C132.502 13.0935 132.73 13.1734 132.73 13.3688V17.1047C132.73 17.1047 132.842 17.3031 132.484 17.3593C132.315 17.386 130.095 17.3593 130.095 17.3593C130.095 17.3593 129.867 17.2616 129.867 17.0633V15.4736H126.492V17.7708C126.492 17.7708 126.605 18.0846 126.72 18.203C126.833 18.3214 127.138 18.5168 127.25 18.5168H135.293C135.293 18.5168 135.714 18.425 135.942 18.1882C136.17 17.9544 136.128 17.2587 136.128 17.2587V12.46C136.128 12.46 136.048 12.0633 135.859 11.9449C135.669 11.8265 135.219 11.7909 135.219 11.7909H130.213C130.213 11.7909 129.897 11.7199 129.873 11.4771C129.858 11.3173 129.873 7.89811 129.873 7.89811C129.873 7.89811 129.911 7.66128 130.062 7.6228C130.213 7.58431 132.543 7.6228 132.543 7.6228C132.543 7.6228 132.771 7.66128 132.81 7.81818C132.848 7.97508 132.878 9.32795 132.878 9.32795L136.244 9.39011L136.241 9.39308Z" fill="#111111"/>
+          <path d="M118.85 7.63229H124.226L124.199 6.26758L116.475 6.32086C116.475 6.32086 115.946 6.29422 115.667 6.71459C115.389 7.13496 115.389 7.50204 115.389 7.50204L115.359 17.3244C115.359 17.3244 115.359 18.0704 115.487 18.2421C115.655 18.473 116.094 18.4937 116.094 18.4937H124.169V17.2474C124.169 17.2474 118.767 17.2208 118.693 17.1942C118.619 17.1675 118.515 17.0106 118.515 17.0106C118.515 17.0106 118.435 13.0527 118.485 12.8958C118.536 12.7389 118.737 12.6353 118.737 12.6353L122.728 12.6056L122.757 11.2528C122.757 11.2528 118.921 11.3327 118.793 11.2528C118.669 11.1758 118.642 11.0959 118.642 11.0959C118.642 11.0959 118.616 7.86912 118.642 7.79215C118.666 7.71222 118.844 7.63525 118.844 7.63525L118.85 7.63229Z" fill="#111111"/>
+          <path d="M104.953 6.34204C104.651 6.28876 96.4805 6.34204 96.4805 6.34204V18.4587H105.03C105.03 18.4587 105.373 18.5001 105.583 18.2485C105.844 17.9406 105.817 17.2923 105.817 17.2923V7.5469C105.817 7.5469 105.93 6.88674 105.649 6.63215C105.433 6.43677 105.255 6.39829 104.953 6.345V6.34204ZM102.792 17.094C102.691 17.3042 102.591 17.3042 102.591 17.3042H99.5622V7.75708C99.5622 7.75708 102.585 7.7186 102.656 7.7778C102.783 7.88141 102.795 7.96726 102.795 7.96726C102.795 7.96726 102.896 16.8838 102.795 17.094H102.792Z" fill="#111111"/>
+          <path d="M109.355 18.5201H112.636V6.32352L109.355 6.29688V18.5201Z" fill="#111111"/>
+          <path d="M139.061 17.0684C139.307 17.0684 139.55 17.1305 139.783 17.2578C140.017 17.3851 140.201 17.5657 140.334 17.7996C140.464 18.0334 140.529 18.2791 140.529 18.5367C140.529 18.7942 140.464 19.0311 140.337 19.2649C140.207 19.4988 140.026 19.6794 139.792 19.8096C139.558 19.9399 139.316 20.002 139.061 20.002C138.807 20.002 138.564 19.9369 138.33 19.8096C138.096 19.6794 137.915 19.4988 137.785 19.2649C137.655 19.0311 137.59 18.7883 137.59 18.5367C137.59 18.2851 137.655 18.0364 137.788 17.7996C137.921 17.5657 138.102 17.3851 138.339 17.2578C138.573 17.1305 138.815 17.0684 139.061 17.0684ZM139.061 17.3111C138.854 17.3111 138.653 17.3644 138.457 17.471C138.262 17.5775 138.108 17.7285 137.998 17.9239C137.889 18.1193 137.833 18.3235 137.833 18.5367C137.833 18.7498 137.889 18.9511 137.995 19.1436C138.105 19.336 138.256 19.4869 138.451 19.5965C138.647 19.706 138.851 19.7593 139.061 19.7593C139.271 19.7593 139.476 19.706 139.671 19.5965C139.866 19.4869 140.017 19.336 140.124 19.1436C140.233 18.9482 140.287 18.7469 140.287 18.5367C140.287 18.3265 140.23 18.1193 140.121 17.9239C140.011 17.7285 139.857 17.5775 139.662 17.471C139.467 17.3644 139.265 17.3111 139.061 17.3111ZM138.416 19.3478V17.77H138.96C139.147 17.77 139.28 17.7848 139.366 17.8144C139.449 17.844 139.517 17.8943 139.564 17.9653C139.615 18.0364 139.638 18.1134 139.638 18.1962C139.638 18.3117 139.597 18.4123 139.514 18.4952C139.431 18.5811 139.322 18.6285 139.183 18.6373C139.239 18.661 139.283 18.6877 139.316 18.7202C139.381 18.7824 139.458 18.889 139.55 19.034L139.742 19.3449H139.428L139.286 19.0962C139.174 18.9008 139.088 18.7794 139.023 18.7291C138.975 18.6906 138.907 18.6729 138.818 18.6758H138.667V19.3478H138.413H138.416ZM138.67 18.4597H138.984C139.135 18.4597 139.236 18.439 139.292 18.3946C139.348 18.3502 139.375 18.291 139.375 18.2199C139.375 18.1726 139.363 18.1311 139.336 18.0956C139.31 18.0601 139.274 18.0305 139.227 18.0127C139.18 17.9949 139.094 17.9861 138.966 17.9861H138.673V18.4656L138.67 18.4597Z" fill="#111111"/>
+        </g>
+        <defs>
+          <clipPath id="seesLogoClip">
+            <rect width="140.53" height="20" fill="white"/>
+          </clipPath>
+        </defs>
+      </svg>
+      <button onClick={onBack} style={{ background: "none", border: "none", fontFamily: css.sans, fontWeight: 700, fontSize: 14, color: css.black, textDecoration: "underline", cursor: "pointer", padding: 0, lineHeight: "20px" }}>
+        Back To Bag
+      </button>
+    </div>
+  );
+}
+
+// ─── FOOTER ───────────────────────────────────────────────────────────────────
+function Footer() {
+  return (
+    <div style={{ flexShrink: 0 }}>
+      <div style={{ background: css.black, padding: 40 }}>
+        <p style={{ fontFamily: css.sans, fontSize: 16, color: css.white, textAlign: "center", lineHeight: "24px", margin: "0 0 24px" }}>
+          If you are using a screen reader and experiencing problems with our website, please call 800.347.7337 or 310.604.6200 for assistance.
+        </p>
+        <p style={{ fontFamily: css.sans, fontSize: 16, color: css.white, textAlign: "center", lineHeight: "24px", margin: 0 }}>
+          ©2024 Copyright See's Candy Shops, Inc. All rights reserved.
+        </p>
+      </div>
+      <div style={{ height: 26, background: `repeating-linear-gradient(90deg, #fff 0, #fff 11px, #c00 11px, #c00 22px)`, backgroundSize: "22px 26px" }} />
+    </div>
+  );
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+function Toast({ message, onClose }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 24,
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 9999,
+        maxWidth: 345,
+        width: "calc(100% - 30px)",
+        background: "#111",
+        color: "#fff",
+        padding: "14px 16px",
+        display: "flex",
+        gap: 12,
+        alignItems: "center",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+        animation: "toastIn 0.3s cubic-bezier(0.4,0,0.2,1) both",
+      }}
+    >
+      <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+      <span style={{ fontFamily: "'Roboto', sans-serif", fontSize: 14, lineHeight: "20px", flex: 1 }}>
+        {message}
+      </span>
+      <button
+        onClick={e => { e.stopPropagation(); onClose(); }}
+        style={{ background: "none", border: "none", color: "#fff", fontSize: 18, cursor: "pointer", padding: 0, lineHeight: 1, flexShrink: 0 }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ─── CONFIRMATION SCREEN ──────────────────────────────────────────────────────
+function ConfirmationScreen({ onReset }) {
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 40, gap: 24 }}>
+      <div style={{ width: 80, height: 80, background: css.black, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg width="36" height="28" viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 5L5 9L13 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontFamily: css.serif, fontSize: 28, color: css.black, marginBottom: 12 }}>Order Placed!</div>
+        <div style={{ fontFamily: css.sans, fontSize: 16, color: css.secondary, lineHeight: "24px" }}>
+          Thank you for your order. We'll send a confirmation to your email shortly.
+        </div>
+      </div>
+      <div style={{ background: css.gray50, padding: 20, width: "100%", boxSizing: "border-box" }}>
+        <div style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, marginBottom: 8 }}>Order Confirmation</div>
+        <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary }}>Order #: SC-2024-94821</div>
+        <div style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary }}>Estimated delivery: Dec. 29 – Jan. 3</div>
+      </div>
+      <Button onClick={onReset} variant="primary" style={{ marginTop: 8 }}>Continue Shopping</Button>
+    </div>
+  );
+}
+
+// ─── MAIN PROTOTYPE ──────────────────────────────────────────────────────────
+function CheckoutPrototype() {
+  const [phase, setPhase] = useState("delivery"); // "delivery" | "payment" | "confirmed"
+  const [expandedRecipient, setExpandedRecipient] = useState(0);
+  const [recipients, setRecipients] = useState([
+    { id: 1, fulfillment: "ship", address: null, shippingMethod: "standard", giftMessage: "", isComplete: false }
+  ]);
+  const [paymentData, setPaymentData] = useState({ method: "credit", sameAsShipping: true });
+  const [billingData, setBillingData] = useState({ sameAsShipping: true, termsAgreed: false });
+  const [toast, setToast] = useState(null); // { message, incompleteIndex }
+  const [recipientErrors, setRecipientErrors] = useState(new Set()); // indices with validation shown
+  const toastTimerRef = useRef(null);
+  const paymentRef = useRef(null);
+  const paymentHeaderRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+
+  // Scroll to payment section — offset so ~100px of the last recipient card peeks above
+  useEffect(() => {
+    if (phase === "payment") {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const target = paymentHeaderRef.current || paymentRef.current;
+          if (!target || !scrollContainerRef.current) return;
+          const containerTop = scrollContainerRef.current.getBoundingClientRect().top;
+          const paymentTop = target.getBoundingClientRect().top;
+          const offset = paymentTop - containerTop + scrollContainerRef.current.scrollTop - 200;
+          scrollContainerRef.current.scrollTo({ top: offset, behavior: "smooth" });
+        });
+      });
+    }
+  }, [phase]);
+
+
+  const showToast = (message, incompleteIndex) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, incompleteIndex });
+    toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleToastClick = (incompleteIndex) => {
+    setToast(null);
+    setExpandedRecipient(incompleteIndex);
+    setTimeout(() => {
+      document.getElementById("recipient-" + incompleteIndex)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
+  const allRecipientsComplete = recipients.every(r => r.isComplete);
+  const canPlaceOrder = paymentData.method && billingData.termsAgreed;
+  const [paymentErrors, setPaymentErrors] = useState({});
+
+  const handlePlaceOrder = () => {
+    const errs = {};
+    if (paymentData.method === "credit") {
+      if (!paymentData.cardNumber) errs.cardNumber = "Required";
+      if (!paymentData.expiry) errs.expiry = "Required";
+      if (!paymentData.cvv) errs.cvv = "Required";
+    }
+    if (!billingData.termsAgreed) errs.termsAgreed = true;
+    if (billingData.sameAsShipping === false) {
+      const ba = billingData.billingAddr || {};
+      if (!ba.firstName) errs.billingFirstName = "Required";
+      if (!ba.lastName) errs.billingLastName = "Required";
+      if (!ba.street) errs.billingStreet = "Required";
+      if (!ba.city) errs.billingCity = "Required";
+      if (!ba.state) errs.billingState = "Required";
+      if (!ba.zip) errs.billingZip = "Required";
+      if (!ba.phone) errs.billingPhone = "Required";
+    }
+    if (Object.keys(errs).length > 0) {
+      setPaymentErrors(errs);
+      // Scroll to first error in priority order
+      setTimeout(() => {
+        const priority = [
+          errs.cardNumber || errs.expiry || errs.cvv ? 'payment-error-card' : null,
+          errs.billingFirstName || errs.billingStreet ? 'payment-error-billing' : null,
+          errs.termsAgreed ? 'payment-error-terms' : null,
+        ].filter(Boolean);
+        const el = document.getElementById(priority[0]);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
+      return;
+    }
+    setPaymentErrors({});
+    setPhase("confirmed");
+  };
+
+  const updateRecipient = (index, data) => {
+    const updated = [...recipients];
+    updated[index] = data;
+    setRecipients(updated);
+    // Clear validation errors when recipient becomes complete
+    if (data.isComplete) {
+      setRecipientErrors(prev => { const next = new Set(prev); next.delete(index); return next; });
+    }
+    // Cards do NOT auto-collapse on completion — only user actions collapse them
+  };
+
+  // Shared: show errors, expand, scroll, toast for a given incomplete recipient index
+  const triggerIncomplete = (incompleteIndex, toastMessage) => {
+    setRecipientErrors(prev => new Set([...prev, incompleteIndex]));
+    setExpandedRecipient(incompleteIndex);
+    showToast(toastMessage, incompleteIndex);
+    setTimeout(() => {
+      document.getElementById("recipient-" + incompleteIndex)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
+  const handleContinueToPayment = () => {
+    const firstIncomplete = recipients.findIndex(r => !r.isComplete);
+    if (firstIncomplete !== -1) {
+      triggerIncomplete(firstIncomplete, "Please complete Recipient " + (firstIncomplete + 1) + " before continuing.");
+      return;
+    }
+    // Collapse all cards before entering payment
+    setExpandedRecipient(null);
+    setPhase("payment");
+  };
+
+  const addRecipient = () => {
+    const lastIndex = recipients.length - 1;
+    if (!recipients[lastIndex]?.isComplete) {
+      triggerIncomplete(lastIndex, "Please complete Recipient " + (lastIndex + 1) + " before adding another.");
+      return;
+    }
+    if (recipients.length >= 15) return;
+    const newId = Date.now();
+    const newIndex = recipients.length;
+    setRecipients([...recipients, { id: newId, fulfillment: "ship", address: null, shippingMethod: "standard", giftMessage: "", isComplete: false }]);
+    // Collapse all existing cards, expand the new one
+    setExpandedRecipient(newIndex);
+    setTimeout(() => document.getElementById("recipient-" + recipients.length)?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  };
+
+  const removeRecipient = (index) => {
+    if (recipients.length <= 1) return;
+    const updated = recipients.filter((_, i) => i !== index);
+    setRecipients(updated);
+    setExpandedRecipient(Math.min(expandedRecipient, updated.length - 1));
+  };
+
+  const firstRecipientAddr = recipients[0]?.address;
+
+  return (
+    <div style={{ display: "flex", justifyContent: "center", width: "100%", fontFamily: css.sans }}>
+      <style>{`
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(-16px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        * { box-sizing: border-box; }
+        .iphone-scroll::-webkit-scrollbar { display: none; }
+        .iphone-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        input, select, textarea, button { font-family: inherit; }
+      `}</style>
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          onClose={() => setToast(null)}
+          onClick={() => handleToastClick(toast.incompleteIndex)}
+        />
+      )}
+      {/* iPhone 14 Pro frame */}
+      <div style={{
+        position: "relative",
+        width: 393,
+        height: 780,
+        background: "linear-gradient(145deg, #2a2a2a 0%, #1a1a1a 50%, #222 100%)",
+        borderRadius: 40.6,
+        boxShadow: "0 0 0 1px #3d3d3d, 0 0 0 2.5px #111, 0 40px 100px rgba(0,0,0,0.8), 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.04)",
+        flexShrink: 0,
+      }}>
+        {/* Side buttons */}
+        <div style={{ position: "absolute", left: -3, top: 120.2, width: 3, height: 27, background: "#2a2a2a", borderRadius: "3px 0 0 3px" }} />
+        <div style={{ position: "absolute", left: -3, top: 156.2, width: 3, height: 27, background: "#2a2a2a", borderRadius: "3px 0 0 3px" }} />
+        <div style={{ position: "absolute", right: -3, top: 135.2, width: 3, height: 54.1, background: "#2a2a2a", borderRadius: "0 3px 3px 0" }} />
+        {/* Screen bezel */}
+        <div style={{ position: "absolute", inset: 7.5, background: "#000", borderRadius: 34.5, overflow: "hidden" }}>
+          {/* Status bar */}
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, height: 38,
+            background: css.white, zIndex: 10,
+            display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+            padding: "0 21px 6px",
+          }}>
+            <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 13, color: css.black, letterSpacing: "-0.3px" }}>9:41</span>
+            <div style={{ position: "absolute", top: 9, left: "50%", transform: "translateX(-50%)", width: 90.1, height: 25.5, background: "#000", borderRadius: 20 }} />
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <svg width="17" height="12" viewBox="0 0 17 12" fill="none">
+                <rect x="0" y="7" width="3" height="5" rx="0.5" fill="#111"/>
+                <rect x="4.5" y="4.5" width="3" height="7.5" rx="0.5" fill="#111"/>
+                <rect x="9" y="2" width="3" height="10" rx="0.5" fill="#111"/>
+                <rect x="13.5" y="0" width="3" height="12" rx="0.5" fill="#111"/>
+              </svg>
+              <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+                <path d="M8 9.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" fill="#111"/>
+                <path d="M3.5 6.5A6.5 6.5 0 0 1 8 4.8a6.5 6.5 0 0 1 4.5 1.7" stroke="#111" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                <path d="M1 3.5A10 10 0 0 1 8 1a10 10 0 0 1 7 2.5" stroke="#111" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+              </svg>
+              <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
+                <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#111" strokeOpacity="0.35"/>
+                <rect x="2" y="2" width="17" height="8" rx="2" fill="#111"/>
+                <path d="M23 4v4a2 2 0 0 0 0-4z" fill="#111" fillOpacity="0.4"/>
+              </svg>
+            </div>
+          </div>
+          {/* App content */}
+          <div ref={scrollContainerRef} className="iphone-scroll" style={{
+            position: "absolute", top: 38, left: 0, right: 0, bottom: 0,
+            background: css.white, overflowY: "auto",
+            display: "flex", flexDirection: "column",
+          }}>
+
+        <Header onBack={() => {}} />
+
+        {phase === "confirmed" ? (
+          <ConfirmationScreen onReset={() => { setPhase("delivery"); setRecipients([{ id: 1, fulfillment: "ship", address: null, shippingMethod: "standard", giftMessage: "", isComplete: false }]); setBillingData({ sameAsShipping: true, termsAgreed: false }); setPaymentData({ method: "credit", sameAsShipping: true }); setExpandedRecipient(0); }} />
+        ) : (
+          <div style={{ flex: 1, padding: "32px 15px", display: "flex", flexDirection: "column", gap: 24 }}>
+
+            {/* ── STEP 1: DELIVERY ── */}
+            <div>
+              <StepHeader
+                number="1"
+                title="Delivery"
+                status={phase === "payment" ? "done" : "active"}
+                onEdit={phase === "payment" ? () => { setPhase("delivery"); setExpandedRecipient(recipients.length - 1); } : null}
+              />
+            </div>
+
+            {phase === "delivery" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 0, ...slideDown }}>
+                {recipients.map((recipient, index) => (
+                  <div key={recipient.id} id={"recipient-" + index}>
+                    <RecipientCardDelivery
+                      recipient={recipient}
+                      index={index}
+                      isExpanded={expandedRecipient === index}
+                      onExpand={setExpandedRecipient}
+                      onUpdate={(data) => updateRecipient(index, data)}
+                      onRemove={() => removeRecipient(index)}
+                      isOnly={recipients.length === 1}
+                      showErrors={recipientErrors.has(index)}
+                      onPickupSelected={index === 0 ? () => setRecipients(r => [r[0]]) : undefined}
+                    />
+                  </div>
+                ))}
+
+                {/* CTA stack */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  {recipients.length < 15 && recipients[0]?.fulfillment !== "bopis" && (
+                    <div style={{
+                      border: `1px solid ${css.gray100}`,
+                      padding: "16px 12px 12px 12px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 16,
+                    }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span style={{ fontFamily: css.sans, fontWeight: 700, fontSize: 16, color: css.black, lineHeight: "24px" }}>
+                          Want to ship to multiple people?
+                        </span>
+                        <span style={{ fontFamily: css.sans, fontSize: 14, color: css.secondary, lineHeight: "20px" }}>
+                          You can add up to 15 recipients to your order.
+                        </span>
+                      </div>
+                      <button
+                        onClick={addRecipient}
+                        style={{
+                          width: "100%",
+                          minHeight: 50,
+                          background: css.white,
+                          border: `1px solid ${css.secondary}`,
+                          fontFamily: css.sans,
+                          fontWeight: 700,
+                          fontSize: 16,
+                          color: css.black,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          cursor: "pointer",
+                          padding: "0 16px",
+                        }}
+                      >
+                        ADD ANOTHER RECIPIENT
+                      </button>
+                    </div>
+                  )}
+                  <div style={{ marginTop: recipients.length < 15 && recipients[0]?.fulfillment !== "bopis" ? 24 : 0 }}>
+                    <Button
+                      variant="primary"
+                      onClick={handleContinueToPayment}
+                    >
+                      Continue to Payment
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Step 2 preview */}
+                <div style={{ marginTop: 32 }}>
+                  <StepHeader number="2" title="Payment" status="next" />
+                </div>
+
+                <div style={{ marginTop: 32 }}>
+                  <OrderSummaryMini recipients={recipients} />
+                </div>
+              </div>
+            )}
+
+            {/* ── STEP 2: PAYMENT ── */}
+            {phase === "payment" && (
+              <div ref={paymentRef} style={{ display: "flex", flexDirection: "column", gap: 0, scrollMarginTop: 16, ...slideDown }}>
+                {/* Recipient summaries */}
+                {recipients.map((r, i) => (
+                  <RecipientReviewCard key={r.id} recipient={r} index={i} onRemove={recipients.length > 1 ? () => removeRecipient(i) : null} />
+                ))}
+
+                {/* Step 2 header */}
+                <div ref={paymentHeaderRef} style={{ marginTop: 20 }}><StepHeader number="2" title="Payment" status="active" /></div>
+
+                <div style={{ marginTop: 20 }}>
+                <PaymentSection data={paymentData} onChange={v => { setPaymentData(v); setPaymentErrors({}); }} errors={paymentErrors} />
+                </div>
+
+                <div style={{ marginTop: 20 }}>
+                <BillingSection
+                  data={billingData}
+                  onChange={v => { setBillingData(v); setPaymentErrors({}); }}
+                  firstRecipientAddr={firstRecipientAddr}
+                  errors={paymentErrors}
+                />
+                </div>
+
+                <div style={{ marginTop: 20 }}>
+                <Button
+                  variant="primary"
+                  onClick={handlePlaceOrder}
+                >
+                  Place Order
+                </Button>
+                </div>
+
+                <div style={{ marginTop: 20 }}>
+                <OrderSummaryMini recipients={recipients} />
+                </div>
+              </div>
+            )}
+
+            {/* Need Help */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", paddingBottom: 16 }}>
+              <a href="#" style={{ fontFamily: css.sans, fontSize: 18, color: css.black, textDecoration: "underline" }}>Need Help?</a>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 20, height: 20, flexShrink: 0, display: "block" }}>
+                <circle cx="10" cy="10" r="9.5" stroke="#111111"/>
+                <path d="M10 9V14M10 7V6.5" stroke="#111111" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+          </div>
+        )}
+
+        <Footer />
+          </div>{/* end iphone-scroll */}
+        </div>{/* end screen bezel */}
+      </div>{/* end iphone frame */}
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<CheckoutPrototype />);
+  </script>
+</body>
+</html>
